@@ -1,70 +1,77 @@
 import os
-import glob
 import sys
+import glob
+import random
+import numpy as np
+from PIL import Image
 
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
-from PIL import Image
 from torchvision import transforms
-
-# Add project root to Python path
-sys.path.append(
-    os.path.dirname(
-        os.path.dirname(
-            os.path.abspath(__file__)
-        )
-    )
-)
-
-from models.baseline_cnn import BaselineSteganography
-from models.message_encoder import text_to_bits
 
 
 # ============================================================
 # CONFIGURATION
 # ============================================================
 
+# Kaggle dataset path
+DATASET_ROOT = "/kaggle/input/datasets/nimshipaul/image-steganography-processed"
+
+TRAIN_DIR = os.path.join(DATASET_ROOT, "train")
+VALIDATION_DIR = os.path.join(DATASET_ROOT, "validation")
+
+# Where the trained model will be saved
+OUTPUT_DIR = "/kaggle/working/baseline_outputs"
+
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+CHECKPOINT_PATH = os.path.join(
+    OUTPUT_DIR,
+    "baseline_best.pth"
+)
+
+# Training parameters
 IMAGE_SIZE = 256
+MESSAGE_BITS = 256
 
 BATCH_SIZE = 16
-
-EPOCHS = 10
+NUM_EPOCHS = 10
 
 LEARNING_RATE = 1e-4
 
-MESSAGE_BITS = 256
+# Image loss weight
+LAMBDA_IMAGE = 1.0
 
-IMAGE_LOSS_WEIGHT = 1.0
+# Message loss weight
+LAMBDA_MESSAGE = 1.0
 
-MESSAGE_LOSS_WEIGHT = 1.0
+RANDOM_SEED = 42
 
-NUM_WORKERS = 2
-
-SEED = 42
+# DataLoader workers
+# 0 is safest for Kaggle/Windows compatibility.
+NUM_WORKERS = 0
 
 
 # ============================================================
 # REPRODUCIBILITY
 # ============================================================
 
-torch.manual_seed(SEED)
+random.seed(RANDOM_SEED)
+np.random.seed(RANDOM_SEED)
+torch.manual_seed(RANDOM_SEED)
 
 if torch.cuda.is_available():
-    torch.cuda.manual_seed_all(SEED)
+    torch.cuda.manual_seed_all(RANDOM_SEED)
 
 
 # ============================================================
 # DEVICE
 # ============================================================
 
-if torch.cuda.is_available():
-
-    device = torch.device("cuda")
-
-else:
-
-    device = torch.device("cpu")
+device = torch.device(
+    "cuda" if torch.cuda.is_available() else "cpu"
+)
 
 
 print("=" * 70)
@@ -77,11 +84,8 @@ print("Device          :", device)
 
 if torch.cuda.is_available():
 
-    print("GPU             :",
-          torch.cuda.get_device_name(0))
-
-    print("GPU count       :",
-          torch.cuda.device_count())
+    print("GPU             :", torch.cuda.get_device_name(0))
+    print("GPU count       :", torch.cuda.device_count())
 
 print("=" * 70)
 
@@ -97,13 +101,10 @@ class SteganographyDataset(Dataset):
         self.image_paths = image_paths
 
         self.transform = transforms.Compose([
-
             transforms.Resize(
                 (IMAGE_SIZE, IMAGE_SIZE)
             ),
-
             transforms.ToTensor()
-
         ])
 
     def __len__(self):
@@ -114,22 +115,22 @@ class SteganographyDataset(Dataset):
 
         image_path = self.image_paths[index]
 
-        # ----------------------------------------------------
-        # Load image
-        # ----------------------------------------------------
+        try:
 
-        image = Image.open(
-            image_path
-        ).convert("L")
+            image = Image.open(
+                image_path
+            ).convert("L")
 
-        image = self.transform(
-            image
-        )
+        except Exception as e:
 
-        # ----------------------------------------------------
-        # Generate a random 256-bit message
-        # ----------------------------------------------------
+            raise RuntimeError(
+                f"Could not read image: {image_path}\n"
+                f"Error: {e}"
+            )
 
+        image = self.transform(image)
+
+        # Generate random binary secret message
         message = torch.randint(
             0,
             2,
@@ -144,62 +145,99 @@ class SteganographyDataset(Dataset):
 # FIND DATASET
 # ============================================================
 
-train_dir = os.path.join(
-    "dataset",
-    "processed",
-    "train"
-)
-
-validation_dir = os.path.join(
-    "dataset",
-    "processed",
-    "validation"
-)
-
-
-train_paths = sorted(
-    glob.glob(
-        os.path.join(
-            train_dir,
-            "*"
-        )
-    )
-)
-
-validation_paths = sorted(
-    glob.glob(
-        os.path.join(
-            validation_dir,
-            "*"
-        )
-    )
-)
-
-
 print("\nDataset information")
 print("-" * 70)
 
-print("Training images   :", len(train_paths))
+print("Dataset root      :", DATASET_ROOT)
+print("Training directory:", TRAIN_DIR)
+print("Validation dir    :", VALIDATION_DIR)
 
-print("Validation images :", len(validation_paths))
+
+# Check dataset root
+if not os.path.exists(DATASET_ROOT):
+
+    raise RuntimeError(
+        f"Dataset root not found:\n{DATASET_ROOT}\n\n"
+        "Make sure the Kaggle dataset is added using "
+        "Add Input."
+    )
+
+
+# Find training images
+train_paths = []
+
+for extension in [
+    "*.png",
+    "*.jpg",
+    "*.jpeg",
+    "*.bmp",
+    "*.pgm",
+    "*.ppm"
+]:
+
+    train_paths.extend(
+        glob.glob(
+            os.path.join(
+                TRAIN_DIR,
+                extension
+            )
+        )
+    )
+
+
+# Find validation images
+validation_paths = []
+
+for extension in [
+    "*.png",
+    "*.jpg",
+    "*.jpeg",
+    "*.bmp",
+    "*.pgm",
+    "*.ppm"
+]:
+
+    validation_paths.extend(
+        glob.glob(
+            os.path.join(
+                VALIDATION_DIR,
+                extension
+            )
+        )
+    )
+
+
+train_paths = sorted(train_paths)
+validation_paths = sorted(validation_paths)
+
+
+print(
+    "Training images   :",
+    len(train_paths)
+)
+
+print(
+    "Validation images :",
+    len(validation_paths)
+)
 
 
 if len(train_paths) == 0:
 
     raise RuntimeError(
-        f"No training images found in: {train_dir}"
+        f"No training images found in:\n{TRAIN_DIR}"
     )
 
 
 if len(validation_paths) == 0:
 
     raise RuntimeError(
-        f"No validation images found in: {validation_dir}"
+        f"No validation images found in:\n{VALIDATION_DIR}"
     )
 
 
 # ============================================================
-# DATA LOADERS
+# DATASET OBJECTS
 # ============================================================
 
 train_dataset = SteganographyDataset(
@@ -210,6 +248,10 @@ validation_dataset = SteganographyDataset(
     validation_paths
 )
 
+
+# ============================================================
+# DATALOADERS
+# ============================================================
 
 train_loader = DataLoader(
     train_dataset,
@@ -231,28 +273,101 @@ validation_loader = DataLoader(
 print("\nDataLoader")
 print("-" * 70)
 
-print("Training batches   :", len(train_loader))
-print("Validation batches :", len(validation_loader))
+print(
+    "Training batches   :",
+    len(train_loader)
+)
+
+print(
+    "Validation batches :",
+    len(validation_loader)
+)
+
+
+# ============================================================
+# IMPORT BASELINE MODEL
+# ============================================================
+
+PROJECT_ROOT = os.path.dirname(
+    os.path.dirname(
+        os.path.abspath(__file__)
+    )
+)
+
+if PROJECT_ROOT not in sys.path:
+
+    sys.path.insert(
+        0,
+        PROJECT_ROOT
+    )
+
+
+from models.baseline_cnn import BaselineSteganography
 
 
 # ============================================================
 # MODEL
 # ============================================================
 
-model = BaselineSteganography(
-    message_bits=MESSAGE_BITS
-)
+model = BaselineSteganography()
 
 model = model.to(device)
+
+
+# ============================================================
+# MULTI-GPU SUPPORT
+# ============================================================
+
+# We use one GPU initially.
+#
+# This makes the baseline easier to reproduce.
+# Later we can enable both Tesla T4 GPUs.
+
+if torch.cuda.is_available():
+
+    print("\nUsing GPU:")
+    print(
+        torch.cuda.get_device_name(0)
+    )
+
+
+# ============================================================
+# MODEL PARAMETERS
+# ============================================================
+
+total_parameters = sum(
+    parameter.numel()
+    for parameter in model.parameters()
+)
+
+trainable_parameters = sum(
+    parameter.numel()
+    for parameter in model.parameters()
+    if parameter.requires_grad
+)
+
+
+print("\nModel")
+print("-" * 70)
+
+print(
+    "Total parameters     :",
+    f"{total_parameters:,}"
+)
+
+print(
+    "Trainable parameters :",
+    f"{trainable_parameters:,}"
+)
 
 
 # ============================================================
 # LOSS FUNCTIONS
 # ============================================================
 
-image_criterion = nn.MSELoss()
+image_loss_function = nn.MSELoss()
 
-message_criterion = nn.BCELoss()
+message_loss_function = nn.BCELoss()
 
 
 # ============================================================
@@ -266,54 +381,22 @@ optimizer = torch.optim.Adam(
 
 
 # ============================================================
-# OUTPUT DIRECTORY
+# TRAINING FUNCTION
 # ============================================================
 
-checkpoint_dir = os.path.join(
-    "outputs",
-    "checkpoints"
-)
-
-os.makedirs(
-    checkpoint_dir,
-    exist_ok=True
-)
-
-
-best_validation_loss = float("inf")
-
-
-# ============================================================
-# TRAINING LOOP
-# ============================================================
-
-for epoch in range(EPOCHS):
-
-    print("\n")
-    print("=" * 70)
-
-    print(
-        f"Epoch {epoch + 1}/{EPOCHS}"
-    )
-
-    print("=" * 70)
-
-
-    # --------------------------------------------------------
-    # TRAIN
-    # --------------------------------------------------------
+def train_one_epoch():
 
     model.train()
 
-    train_total_loss = 0.0
+    total_loss = 0.0
+    total_image_loss = 0.0
+    total_message_loss = 0.0
 
-    train_image_loss = 0.0
-
-    train_message_loss = 0.0
-
+    total_batches = len(train_loader)
 
     for batch_index, (cover, message) in enumerate(
-        train_loader
+        train_loader,
+        start=1
     ):
 
         cover = cover.to(
@@ -326,7 +409,6 @@ for epoch in range(EPOCHS):
             non_blocking=True
         )
 
-
         # ----------------------------------------------------
         # Forward pass
         # ----------------------------------------------------
@@ -336,28 +418,33 @@ for epoch in range(EPOCHS):
             message
         )
 
-
         # ----------------------------------------------------
-        # Calculate losses
+        # Image reconstruction loss
         # ----------------------------------------------------
 
-        image_loss = image_criterion(
+        image_loss = image_loss_function(
             stego,
             cover
         )
 
-        message_loss = message_criterion(
+        # ----------------------------------------------------
+        # Message recovery loss
+        # ----------------------------------------------------
+
+        message_loss = message_loss_function(
             recovered_message,
             message
         )
 
+        # ----------------------------------------------------
+        # Combined loss
+        # ----------------------------------------------------
 
-        total_loss = (
-            IMAGE_LOSS_WEIGHT * image_loss
+        loss = (
+            LAMBDA_IMAGE * image_loss
             +
-            MESSAGE_LOSS_WEIGHT * message_loss
+            LAMBDA_MESSAGE * message_loss
         )
-
 
         # ----------------------------------------------------
         # Backpropagation
@@ -367,75 +454,75 @@ for epoch in range(EPOCHS):
             set_to_none=True
         )
 
-        total_loss.backward()
+        loss.backward()
 
         optimizer.step()
 
-
         # ----------------------------------------------------
-        # Accumulate losses
+        # Statistics
         # ----------------------------------------------------
 
-        train_total_loss += (
-            total_loss.item()
-        )
+        total_loss += loss.item()
 
-        train_image_loss += (
+        total_image_loss += (
             image_loss.item()
         )
 
-        train_message_loss += (
+        total_message_loss += (
             message_loss.item()
         )
-
 
         # ----------------------------------------------------
         # Progress
         # ----------------------------------------------------
 
         if (
-            batch_index + 1
-        ) % 100 == 0:
+            batch_index == 1
+            or batch_index % 50 == 0
+            or batch_index == total_batches
+        ):
 
             print(
-                f"Batch {batch_index + 1}/{len(train_loader)} "
-                f"| Loss: {total_loss.item():.6f}"
+                f"Batch "
+                f"{batch_index}/{total_batches} | "
+                f"Loss: {loss.item():.6f} | "
+                f"Image Loss: {image_loss.item():.6f} | "
+                f"Message Loss: {message_loss.item():.6f}"
             )
 
-
-    # --------------------------------------------------------
-    # Average training losses
-    # --------------------------------------------------------
-
-    train_total_loss /= len(
-        train_loader
+    average_loss = (
+        total_loss / total_batches
     )
 
-    train_image_loss /= len(
-        train_loader
+    average_image_loss = (
+        total_image_loss / total_batches
     )
 
-    train_message_loss /= len(
-        train_loader
+    average_message_loss = (
+        total_message_loss / total_batches
+    )
+
+    return (
+        average_loss,
+        average_image_loss,
+        average_message_loss
     )
 
 
-    # ========================================================
-    # VALIDATION
-    # ========================================================
+# ============================================================
+# VALIDATION FUNCTION
+# ============================================================
+
+def validate():
 
     model.eval()
 
-    validation_total_loss = 0.0
+    total_loss = 0.0
+    total_image_loss = 0.0
+    total_message_loss = 0.0
 
-    validation_image_loss = 0.0
-
-    validation_message_loss = 0.0
-
-    correct_bits = 0
-
+    total_correct_bits = 0
     total_bits = 0
-
 
     with torch.no_grad():
 
@@ -451,43 +538,38 @@ for epoch in range(EPOCHS):
                 non_blocking=True
             )
 
-
+            # Forward pass
             stego, recovered_message = model(
                 cover,
                 message
             )
 
-
-            image_loss = image_criterion(
+            # Losses
+            image_loss = image_loss_function(
                 stego,
                 cover
             )
 
-            message_loss = message_criterion(
+            message_loss = message_loss_function(
                 recovered_message,
                 message
             )
 
-
-            total_loss = (
-                IMAGE_LOSS_WEIGHT * image_loss
+            loss = (
+                LAMBDA_IMAGE * image_loss
                 +
-                MESSAGE_LOSS_WEIGHT * message_loss
+                LAMBDA_MESSAGE * message_loss
             )
 
+            total_loss += loss.item()
 
-            validation_total_loss += (
-                total_loss.item()
-            )
-
-            validation_image_loss += (
+            total_image_loss += (
                 image_loss.item()
             )
 
-            validation_message_loss += (
+            total_message_loss += (
                 message_loss.item()
             )
-
 
             # ------------------------------------------------
             # Bit accuracy
@@ -497,147 +579,315 @@ for epoch in range(EPOCHS):
                 recovered_message >= 0.5
             ).float()
 
-
-            correct_bits += (
+            correct_bits = (
                 predicted_bits == message
             ).sum().item()
 
+            total_correct_bits += correct_bits
 
             total_bits += message.numel()
 
-
-    # --------------------------------------------------------
-    # Average validation losses
-    # --------------------------------------------------------
-
-    validation_total_loss /= len(
-        validation_loader
+    average_loss = (
+        total_loss / len(validation_loader)
     )
 
-    validation_image_loss /= len(
-        validation_loader
+    average_image_loss = (
+        total_image_loss /
+        len(validation_loader)
     )
 
-    validation_message_loss /= len(
-        validation_loader
+    average_message_loss = (
+        total_message_loss /
+        len(validation_loader)
     )
-
 
     bit_accuracy = (
-        correct_bits / total_bits
+        total_correct_bits /
+        total_bits
     )
+
+    return (
+        average_loss,
+        average_image_loss,
+        average_message_loss,
+        bit_accuracy
+    )
+
+
+# ============================================================
+# TRAINING LOOP
+# ============================================================
+
+print("\n")
+print("=" * 70)
+print("STARTING TRAINING")
+print("=" * 70)
+
+
+best_validation_loss = float("inf")
+
+
+training_history = []
+
+
+for epoch in range(
+    1,
+    NUM_EPOCHS + 1
+):
+
+    print("\n")
+    print("=" * 70)
+
+    print(
+        f"Epoch {epoch}/{NUM_EPOCHS}"
+    )
+
+    print("=" * 70)
+
+
+    # ========================================================
+    # TRAIN
+    # ========================================================
+
+    train_loss, train_image_loss, train_message_loss = (
+        train_one_epoch()
+    )
+
+
+    # ========================================================
+    # VALIDATION
+    # ========================================================
+
+    (
+        validation_loss,
+        validation_image_loss,
+        validation_message_loss,
+        bit_accuracy
+    ) = validate()
 
 
     # ========================================================
     # PRINT RESULTS
     # ========================================================
 
-    print("\nTraining Results")
+    print("\nEpoch results")
     print("-" * 70)
 
     print(
-        f"Training Total Loss    : "
-        f"{train_total_loss:.6f}"
+        f"Train Loss           : "
+        f"{train_loss:.6f}"
     )
 
     print(
-        f"Training Image Loss    : "
+        f"Train Image Loss     : "
         f"{train_image_loss:.6f}"
     )
 
     print(
-        f"Training Message Loss  : "
+        f"Train Message Loss   : "
         f"{train_message_loss:.6f}"
     )
 
-
-    print("\nValidation Results")
-    print("-" * 70)
-
     print(
-        f"Validation Total Loss  : "
-        f"{validation_total_loss:.6f}"
+        f"Validation Loss      : "
+        f"{validation_loss:.6f}"
     )
 
     print(
-        f"Validation Image Loss  : "
+        f"Validation Image Loss: "
         f"{validation_image_loss:.6f}"
     )
 
     print(
-        f"Validation Message Loss: "
+        f"Validation Msg Loss  : "
         f"{validation_message_loss:.6f}"
     )
 
     print(
-        f"Validation Bit Accuracy: "
+        f"Message Bit Accuracy : "
         f"{bit_accuracy * 100:.2f}%"
     )
 
 
     # ========================================================
-    # SAVE BEST MODEL
+    # SAVE HISTORY
     # ========================================================
 
-    if validation_total_loss < best_validation_loss:
+    training_history.append({
 
-        best_validation_loss = (
-            validation_total_loss
-        )
+        "epoch": epoch,
 
-        checkpoint_path = os.path.join(
-            checkpoint_dir,
-            "baseline_best.pth"
-        )
+        "train_loss":
+            train_loss,
+
+        "train_image_loss":
+            train_image_loss,
+
+        "train_message_loss":
+            train_message_loss,
+
+        "validation_loss":
+            validation_loss,
+
+        "validation_image_loss":
+            validation_image_loss,
+
+        "validation_message_loss":
+            validation_message_loss,
+
+        "bit_accuracy":
+            bit_accuracy
+    })
+
+
+    # ========================================================
+    # SAVE BEST CHECKPOINT
+    # ========================================================
+
+    if validation_loss < best_validation_loss:
+
+        best_validation_loss = validation_loss
+
+        checkpoint = {
+
+            "epoch": epoch,
+
+            "model_state_dict":
+                model.state_dict(),
+
+            "optimizer_state_dict":
+                optimizer.state_dict(),
+
+            "validation_loss":
+                validation_loss,
+
+            "bit_accuracy":
+                bit_accuracy,
+
+            "config": {
+
+                "image_size":
+                    IMAGE_SIZE,
+
+                "message_bits":
+                    MESSAGE_BITS,
+
+                "batch_size":
+                    BATCH_SIZE,
+
+                "learning_rate":
+                    LEARNING_RATE,
+
+                "lambda_image":
+                    LAMBDA_IMAGE,
+
+                "lambda_message":
+                    LAMBDA_MESSAGE
+            }
+        }
 
         torch.save(
-            {
-                "epoch": epoch + 1,
-
-                "model_state_dict":
-                    model.state_dict(),
-
-                "optimizer_state_dict":
-                    optimizer.state_dict(),
-
-                "validation_loss":
-                    validation_total_loss,
-
-                "bit_accuracy":
-                    bit_accuracy
-            },
-            checkpoint_path
+            checkpoint,
+            CHECKPOINT_PATH
         )
 
+        print("\nBest model saved!")
         print(
-            "\n✓ Best model saved:"
-        )
-
-        print(
-            checkpoint_path
+            "Checkpoint:",
+            CHECKPOINT_PATH
         )
 
 
 # ============================================================
-# TRAINING COMPLETE
+# SAVE TRAINING HISTORY
+# ============================================================
+
+history_path = os.path.join(
+    OUTPUT_DIR,
+    "training_history.txt"
+)
+
+with open(
+    history_path,
+    "w"
+) as file:
+
+    file.write(
+        "BASELINE CNN TRAINING HISTORY\n"
+    )
+
+    file.write(
+        "=" * 70 + "\n\n"
+    )
+
+    for result in training_history:
+
+        file.write(
+            f"Epoch: {result['epoch']}\n"
+        )
+
+        file.write(
+            f"Train Loss: "
+            f"{result['train_loss']:.6f}\n"
+        )
+
+        file.write(
+            f"Train Image Loss: "
+            f"{result['train_image_loss']:.6f}\n"
+        )
+
+        file.write(
+            f"Train Message Loss: "
+            f"{result['train_message_loss']:.6f}\n"
+        )
+
+        file.write(
+            f"Validation Loss: "
+            f"{result['validation_loss']:.6f}\n"
+        )
+
+        file.write(
+            f"Validation Image Loss: "
+            f"{result['validation_image_loss']:.6f}\n"
+        )
+
+        file.write(
+            f"Validation Message Loss: "
+            f"{result['validation_message_loss']:.6f}\n"
+        )
+
+        file.write(
+            f"Message Bit Accuracy: "
+            f"{result['bit_accuracy'] * 100:.2f}%\n"
+        )
+
+        file.write(
+            "\n"
+        )
+
+
+# ============================================================
+# FINAL OUTPUT
 # ============================================================
 
 print("\n")
 print("=" * 70)
-print("TRAINING COMPLETE")
+print("BASELINE TRAINING COMPLETE")
 print("=" * 70)
 
 print(
-    "Best validation loss:",
-    best_validation_loss
+    "Best checkpoint :",
+    CHECKPOINT_PATH
 )
 
 print(
-    "Checkpoint:",
-    os.path.join(
-        checkpoint_dir,
-        "baseline_best.pth"
-    )
+    "Training history:",
+    history_path
+)
+
+print(
+    "Best validation loss:",
+    f"{best_validation_loss:.6f}"
 )
 
 print("=" * 70)
