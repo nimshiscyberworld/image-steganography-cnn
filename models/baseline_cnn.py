@@ -109,9 +109,9 @@ class Encoder(nn.Module):
 
         self.conv4 = ConvBlock(64, 32)
 
-        self.output = nn.Conv2d(
+    self.output = nn.Conv2d(
     32,
-    32,
+    1,
     kernel_size=3,
     padding=1
 )
@@ -158,13 +158,12 @@ class Decoder(nn.Module):
 
         self.conv4 = ConvBlock(64, 32)
 
-        self.output = nn.Conv2d(
-            32,
-            1,
-            kernel_size=3,
-            padding=1
-        )
-
+      self.output = nn.Conv2d(
+    32,
+    32,
+    kernel_size=3,
+    padding=1
+)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, stego):
