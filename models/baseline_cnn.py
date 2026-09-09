@@ -8,14 +8,12 @@ import torch.nn as nn
 
 class MessageEmbedder(nn.Module):
     """
-    Converts a 256-bit secret message into a spatial feature map
-    that can be combined with the cover image.
+    Converts a 256-bit message into a multi-channel
+    spatial feature representation.
     """
 
     def __init__(self, message_bits=256):
         super().__init__()
-
-        self.message_bits = message_bits
 
         self.fc = nn.Sequential(
             nn.Linear(message_bits, 128 * 16 * 16),
@@ -27,10 +25,7 @@ class MessageEmbedder(nn.Module):
             nn.ReLU(inplace=True),
 
             nn.Conv2d(64, 32, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-
-            nn.Conv2d(32, 1, kernel_size=3, padding=1),
-            nn.Sigmoid()
+            nn.ReLU(inplace=True)
         )
 
         self.upsample = nn.Upsample(
@@ -106,7 +101,7 @@ class Encoder(nn.Module):
         # Secret feature = 1 channel
         # Combined = 2 channels
 
-        self.conv1 = ConvBlock(2, 32)
+        self.conv1 = ConvBlock(33, 32)
 
         self.conv2 = ConvBlock(32, 64)
 
@@ -115,11 +110,11 @@ class Encoder(nn.Module):
         self.conv4 = ConvBlock(64, 32)
 
         self.output = nn.Conv2d(
-            32,
-            1,
-            kernel_size=3,
-            padding=1
-        )
+    32,
+    32,
+    kernel_size=3,
+    padding=1
+)
 
         self.sigmoid = nn.Sigmoid()
 
@@ -197,33 +192,28 @@ class Decoder(nn.Module):
 
 class MessageDecoder(nn.Module):
     """
-    Converts the decoded spatial representation into
-    256 recovered bits.
+    Converts the decoded multi-channel spatial representation
+    back into the original 256-bit message.
     """
 
     def __init__(self, message_bits=256):
-
         super().__init__()
 
-        self.message_bits = message_bits
-
-        self.pool = nn.AdaptiveAvgPool2d(
-            (8, 8)
-        )
+        self.pool = nn.AdaptiveAvgPool2d((8, 8))
 
         self.fc = nn.Sequential(
 
             nn.Flatten(),
 
             nn.Linear(
-                1 * 8 * 8,
-                256
+                32 * 8 * 8,
+                512
             ),
 
             nn.ReLU(inplace=True),
 
             nn.Linear(
-                256,
+                512,
                 message_bits
             ),
 
@@ -237,7 +227,6 @@ class MessageDecoder(nn.Module):
         message = self.fc(x)
 
         return message
-
 
 # ============================================================
 # COMPLETE BASELINE STEGANOGRAPHY MODEL
