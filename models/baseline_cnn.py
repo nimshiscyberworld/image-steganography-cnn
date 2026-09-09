@@ -190,44 +190,46 @@ class Decoder(nn.Module):
 # MESSAGE DECODER
 # ============================================================
 
-class MessageDecoder(nn.Module):
-    """
-    Converts the decoded multi-channel spatial representation
-    back into the original 256-bit message.
-    """
+class Decoder(nn.Module):
 
-    def __init__(self, message_bits=256):
+    def __init__(self):
+
         super().__init__()
 
-        self.pool = nn.AdaptiveAvgPool2d((8, 8))
+        self.conv1 = ConvBlock(1, 32)
 
-        self.fc = nn.Sequential(
+        self.conv2 = ConvBlock(32, 64)
 
-            nn.Flatten(),
+        self.conv3 = ConvBlock(64, 64)
 
-            nn.Linear(
-                32 * 8 * 8,
-                512
-            ),
+        self.conv4 = ConvBlock(64, 32)
 
-            nn.ReLU(inplace=True),
-
-            nn.Linear(
-                512,
-                message_bits
-            ),
-
-            nn.Sigmoid()
+        self.output = nn.Conv2d(
+            32,
+            32,
+            kernel_size=3,
+            padding=1
         )
 
-    def forward(self, secret_feature):
+        self.sigmoid = nn.Sigmoid()
 
-        x = self.pool(secret_feature)
+    def forward(self, stego):
 
-        message = self.fc(x)
+        x = self.conv1(stego)
 
-        return message
+        x = self.conv2(x)
 
+        x = self.conv3(x)
+
+        x = self.conv4(x)
+
+        secret_feature = self.output(x)
+
+        secret_feature = self.sigmoid(
+            secret_feature
+        )
+
+        return secret_feature
 # ============================================================
 # COMPLETE BASELINE STEGANOGRAPHY MODEL
 # ============================================================
