@@ -191,10 +191,10 @@ class Decoder(nn.Module):
 # ============================================================
 
 class MessageDecoder(nn.Module):
-
+    """
     Converts the decoded multi-channel spatial representation
     back into the original 256-bit message.
-    
+    """
 
     def __init__(self, message_bits=256):
         super().__init__()
