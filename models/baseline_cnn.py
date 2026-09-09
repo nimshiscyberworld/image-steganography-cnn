@@ -91,32 +91,67 @@ class ConvBlock(nn.Module):
 # ENCODER
 # ============================================================
 
+# ============================================================
+# ENCODER
+# ============================================================
+
 class Encoder(nn.Module):
 
-  def __init__(self):
+    def __init__(self):
 
-    super().__init__()
+        super().__init__()
 
-    # Cover = 1 channel
-    # Secret feature = 32 channels
-    # Combined = 33 channels
+        # Cover = 1 channel
+        # Secret feature = 32 channels
+        # Combined = 33 channels
 
-    self.conv1 = ConvBlock(33, 32)
+        self.conv1 = ConvBlock(33, 32)
 
-    self.conv2 = ConvBlock(32, 64)
+        self.conv2 = ConvBlock(32, 64)
 
-    self.conv3 = ConvBlock(64, 64)
+        self.conv3 = ConvBlock(64, 64)
 
-    self.conv4 = ConvBlock(64, 32)
+        self.conv4 = ConvBlock(64, 32)
 
-    self.output = nn.Conv2d(
-        32,
-        1,
-        kernel_size=3,
-        padding=1
-    )
+        # Stego image must be 1 channel
 
-    self.sigmoid = nn.Sigmoid()
+        self.output = nn.Conv2d(
+            32,
+            1,
+            kernel_size=3,
+            padding=1
+        )
+
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, cover, secret_feature):
+
+        # Combine cover image and message feature
+
+        x = torch.cat(
+            [cover, secret_feature],
+            dim=1
+        )
+
+        x = self.conv1(x)
+
+        x = self.conv2(x)
+
+        x = self.conv3(x)
+
+        x = self.conv4(x)
+
+        # Generate stego image
+
+        stego = self.output(x)
+
+        stego = self.sigmoid(stego)
+
+        return stego
+
+# ============================================================
+# DECODER
+# ============================================================
 
 # ============================================================
 # DECODER
@@ -135,6 +170,8 @@ class Decoder(nn.Module):
         self.conv3 = ConvBlock(64, 64)
 
         self.conv4 = ConvBlock(64, 32)
+
+        # Output 32-channel recovered feature
 
         self.output = nn.Conv2d(
             32,
@@ -162,7 +199,6 @@ class Decoder(nn.Module):
         )
 
         return secret_feature
-
 # ============================================================
 # MESSAGE DECODER
 # ============================================================
