@@ -93,52 +93,30 @@ class ConvBlock(nn.Module):
 
 class Encoder(nn.Module):
 
-    def __init__(self):
+  def __init__(self):
 
-        super().__init__()
+    super().__init__()
 
-        # Cover = 1 channel
-        # Secret feature = 1 channel
-        # Combined = 2 channels
+    # Cover = 1 channel
+    # Secret feature = 32 channels
+    # Combined = 33 channels
 
-        self.conv1 = ConvBlock(33, 32)
+    self.conv1 = ConvBlock(33, 32)
 
-        self.conv2 = ConvBlock(32, 64)
+    self.conv2 = ConvBlock(32, 64)
 
-        self.conv3 = ConvBlock(64, 64)
+    self.conv3 = ConvBlock(64, 64)
 
-        self.conv4 = ConvBlock(64, 32)
+    self.conv4 = ConvBlock(64, 32)
 
     self.output = nn.Conv2d(
-    32,
-    1,
-    kernel_size=3,
-    padding=1
-)
+        32,
+        1,
+        kernel_size=3,
+        padding=1
+    )
 
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, cover, secret_feature):
-
-        x = torch.cat(
-            [cover, secret_feature],
-            dim=1
-        )
-
-        x = self.conv1(x)
-
-        x = self.conv2(x)
-
-        x = self.conv3(x)
-
-        x = self.conv4(x)
-
-        stego = self.output(x)
-
-        stego = self.sigmoid(stego)
-
-        return stego
-
+    self.sigmoid = nn.Sigmoid()
 
 # ============================================================
 # DECODER
@@ -158,12 +136,13 @@ class Decoder(nn.Module):
 
         self.conv4 = ConvBlock(64, 32)
 
-      self.output = nn.Conv2d(
-    32,
-    32,
-    kernel_size=3,
-    padding=1
-)
+        self.output = nn.Conv2d(
+            32,
+            32,
+            kernel_size=3,
+            padding=1
+        )
+
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, stego):
@@ -183,7 +162,6 @@ class Decoder(nn.Module):
         )
 
         return secret_feature
-
 
 # ============================================================
 # MESSAGE DECODER
