@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
-
 from models.baseline_cnn import BaselineSteganography
 
 
