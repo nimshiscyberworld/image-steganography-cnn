@@ -3,6 +3,9 @@ import random
 import numpy as np
 import torch
 import torch.nn as nn
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from models.baseline_cnn import BaselineSteganography
