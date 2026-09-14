@@ -14,6 +14,34 @@ from models.baseline_cnn import BaselineSteganography
 # CONFIGURATION
 # ============================================================
 
+class ImageDataset(torch.utils.data.Dataset):
+    def __init__(self, root_dir, transform=None):
+        self.root_dir = root_dir
+        self.transform = transform
+
+        self.image_files = [
+            f for f in os.listdir(root_dir)
+            if f.lower().endswith((".png", ".jpg", ".jpeg", ".bmp"))
+        ]
+
+        self.image_files.sort()
+
+        if len(self.image_files) == 0:
+            raise RuntimeError(f"No images found in {root_dir}")
+
+    def __len__(self):
+        return len(self.image_files)
+
+    def __getitem__(self, idx):
+        image_path = os.path.join(self.root_dir, self.image_files[idx])
+
+        image = Image.open(image_path).convert("L")
+
+        if self.transform:
+            image = self.transform(image)
+
+        return image
+
 DATASET_ROOT = "/kaggle/input/datasets/nimshipaul/image-steganography-processed"
 
 OUTPUT_DIR = "/kaggle/working/improved_baseline_outputs"
