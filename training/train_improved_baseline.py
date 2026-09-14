@@ -210,7 +210,7 @@ with open(history_path, "w") as history_file:
         total_message_bits = 0
         correct_message_bits = 0
 
-        for cover, _ in train_loader:
+        for cover in train_loader:
 
             cover = cover.to(device)
 
@@ -294,7 +294,7 @@ with open(history_path, "w") as history_file:
 
         with torch.no_grad():
 
-            for cover, _ in val_loader:
+            for cover in val_loader:
 
                 cover = cover.to(device)
 
