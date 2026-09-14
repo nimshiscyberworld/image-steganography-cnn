@@ -6,6 +6,7 @@ import torch.nn as nn
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from PIL import Image
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from models.baseline_cnn import BaselineSteganography
@@ -104,13 +105,13 @@ transform = transforms.Compose([
     transforms.ToTensor()
 ])
 
-train_dataset = datasets.ImageFolder(
-    TRAIN_DIR,
+train_dataset = ImageDataset(
+    os.path.join(DATASET_ROOT, "train"),
     transform=transform
 )
 
-val_dataset = datasets.ImageFolder(
-    VAL_DIR,
+val_dataset = ImageDataset(
+    os.path.join(DATASET_ROOT, "validation"),
     transform=transform
 )
 
@@ -125,16 +126,14 @@ train_loader = DataLoader(
     train_dataset,
     batch_size=BATCH_SIZE,
     shuffle=True,
-    num_workers=NUM_WORKERS,
-    pin_memory=torch.cuda.is_available()
+    num_workers=NUM_WORKERS
 )
 
 val_loader = DataLoader(
     val_dataset,
     batch_size=BATCH_SIZE,
     shuffle=False,
-    num_workers=NUM_WORKERS,
-    pin_memory=torch.cuda.is_available()
+    num_workers=NUM_WORKERS
 )
 
 print("Training batches   :", len(train_loader))
