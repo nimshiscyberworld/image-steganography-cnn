@@ -86,6 +86,33 @@ print("Message B: all 1")
 # CREATE MODEL
 # ============================================================
 
+CHECKPOINT_PATH = (
+    "/kaggle/working/improved_baseline_outputs/"
+    "improved_baseline_best.pth"
+)
+
+model = BaselineSteganography(
+    message_bits=MESSAGE_BITS
+).to(DEVICE)
+
+checkpoint = torch.load(
+    CHECKPOINT_PATH,
+    map_location=DEVICE,
+    weights_only=False
+)
+
+# Support either a direct state dictionary or a checkpoint dictionary.
+if "model_state_dict" in checkpoint:
+    state_dict = checkpoint["model_state_dict"]
+elif "state_dict" in checkpoint:
+    state_dict = checkpoint["state_dict"]
+else:
+    state_dict = checkpoint
+
+model.load_state_dict(state_dict)
+model.eval()
+
+print("Loaded trained checkpoint:", CHECKPOINT_PATH)
 model = BaselineSteganography(
     message_bits=MESSAGE_BITS
 ).to(DEVICE)
