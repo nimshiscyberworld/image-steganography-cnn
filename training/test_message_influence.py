@@ -83,7 +83,7 @@ print("Message B: all 1")
 
 
 # ============================================================
-# CREATE MODEL
+# LOAD TRAINED MODEL CHECKPOINT
 # ============================================================
 
 CHECKPOINT_PATH = (
@@ -91,17 +91,19 @@ CHECKPOINT_PATH = (
     "improved_baseline_best.pth"
 )
 
+# Create model ONCE
 model = BaselineSteganography(
     message_bits=MESSAGE_BITS
 ).to(DEVICE)
 
+# Load checkpoint
 checkpoint = torch.load(
     CHECKPOINT_PATH,
     map_location=DEVICE,
     weights_only=False
 )
 
-# Support either a direct state dictionary or a checkpoint dictionary.
+# Handle different checkpoint formats
 if "model_state_dict" in checkpoint:
     state_dict = checkpoint["model_state_dict"]
 elif "state_dict" in checkpoint:
@@ -109,15 +111,14 @@ elif "state_dict" in checkpoint:
 else:
     state_dict = checkpoint
 
+# Load trained weights
 model.load_state_dict(state_dict)
+
+# Evaluation mode
 model.eval()
 
-print("Loaded trained checkpoint:", CHECKPOINT_PATH)
-model = BaselineSteganography(
-    message_bits=MESSAGE_BITS
-).to(DEVICE)
-
-model.eval()
+print("\nLoaded trained checkpoint:")
+print(CHECKPOINT_PATH)
 
 print("\nModel parameters:")
 print(sum(p.numel() for p in model.parameters()))
