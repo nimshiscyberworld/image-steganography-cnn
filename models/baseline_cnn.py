@@ -5,52 +5,66 @@ import torch.nn as nn
 # ============================================================
 # MESSAGE EMBEDDER
 # ============================================================
+# ============================================================
+# MESSAGE EMBEDDER
+# HiDDeN-inspired spatial message representation
+# ============================================================
 
 class MessageEmbedder(nn.Module):
     """
-    Converts a 256-bit message into a multi-channel
-    spatial feature representation.
+    Converts a 256-bit message into a spatially replicated
+    multi-channel representation.
+
+    HiDDeN-inspired approach:
+    The message information is distributed spatially across
+    the image instead of being generated as a 16x16 feature map.
     """
 
-    def __init__(self, message_bits=256):
+    def __init__(self, message_bits=256, feature_channels=32):
         super().__init__()
 
+        self.feature_channels = feature_channels
+
+        # Project 256 message bits into 32 feature values
         self.fc = nn.Sequential(
-            nn.Linear(message_bits, 128 * 16 * 16),
+            nn.Linear(
+                message_bits,
+                feature_channels
+            ),
             nn.ReLU(inplace=True)
-        )
-
-        self.conv = nn.Sequential(
-            nn.Conv2d(128, 64, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-
-            nn.Conv2d(64, 32, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True)
-        )
-
-        self.upsample = nn.Upsample(
-            size=(256, 256),
-            mode="bilinear",
-            align_corners=False
         )
 
     def forward(self, message):
 
+        # ----------------------------------------------------
+        # message
+        # [B, 256]
+        # ----------------------------------------------------
+
         x = self.fc(message)
 
-        x = x.view(
-            message.size(0),
-            128,
-            16,
-            16
+        # ----------------------------------------------------
+        # [B, 32]
+        # → [B, 32, 1, 1]
+        # ----------------------------------------------------
+
+        x = x.unsqueeze(-1).unsqueeze(-1)
+
+        # ----------------------------------------------------
+        # Spatially replicate message features
+        # [B, 32, 1, 1]
+        # →
+        # [B, 32, 256, 256]
+        # ----------------------------------------------------
+
+        x = x.expand(
+            -1,
+            -1,
+            256,
+            256
         )
 
-        x = self.conv(x)
-
-        x = self.upsample(x)
-
         return x
-
 
 # ============================================================
 # CNN BLOCK
