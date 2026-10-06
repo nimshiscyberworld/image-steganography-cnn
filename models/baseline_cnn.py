@@ -216,33 +216,48 @@ class Decoder(nn.Module):
 # ============================================================
 # MESSAGE DECODER
 # ============================================================
+# ============================================================
+# MESSAGE DECODER
+# HiDDeN-inspired message recovery
+# ============================================================
 
 class MessageDecoder(nn.Module):
     """
-    Converts the decoded multi-channel spatial representation
-    back into the original 256-bit message.
+    Converts the decoded spatial feature representation
+    into the original 256-bit message.
+
+    Uses global spatial average pooling, inspired by HiDDeN.
     """
 
     def __init__(self, message_bits=256):
         super().__init__()
 
-        self.pool = nn.AdaptiveAvgPool2d((8, 8))
+        # Global spatial average pooling
+        self.pool = nn.AdaptiveAvgPool2d((1, 1))
 
-        self.fc = nn.Sequential(
-            nn.Flatten(),
-
-            nn.Linear(32 * 8 * 8, 512),
-            nn.ReLU(inplace=True),
-
-            nn.Linear(512, message_bits),
-            nn.Sigmoid()
+        # 32 spatial feature channels -> 256 message bits
+        self.fc = nn.Linear(
+            32,
+            message_bits
         )
+
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, secret_feature):
 
+        # [B, 32, 256, 256]
         x = self.pool(secret_feature)
 
+        # [B, 32, 1, 1]
+        x = x.view(
+            x.size(0),
+            -1
+        )
+
+        # [B, 32] -> [B, 256]
         message = self.fc(x)
+
+        message = self.sigmoid(message)
 
         return message
 # ============================================================
