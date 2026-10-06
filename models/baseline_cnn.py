@@ -221,13 +221,20 @@ class Decoder(nn.Module):
 # ============================================================
 
 class MessageDecoder(nn.Module):
+    """
+    Converts the decoded spatial feature representation
+    into the original 256-bit message.
+
+    Keeps more spatial information before message reconstruction.
+    """
+
     def __init__(self, message_bits=256):
         super().__init__()
 
-        # Keep more spatial information
+        # Reduce 256x256 feature map to 8x8
         self.pool = nn.AdaptiveAvgPool2d((8, 8))
 
-        # 32 channels × 8 × 8 = 2048 features
+        # 32 channels x 8 x 8 = 2048 features
         self.fc = nn.Sequential(
             nn.Linear(32 * 8 * 8, 512),
             nn.ReLU(inplace=True),
@@ -238,16 +245,15 @@ class MessageDecoder(nn.Module):
 
     def forward(self, secret_feature):
 
-        # [B, 32, 256, 256]
+        # Input: [B, 32, 256, 256]
         x = self.pool(secret_feature)
 
-        # [B, 32, 8, 8]
+        # [B, 32, 8, 8] -> [B, 2048]
         x = x.view(x.size(0), -1)
 
-        # [B, 2048]
+        # [B, 256]
         message = self.fc(x)
 
-        # [B, 256]
         return message
 # ============================================================
 # COMPLETE BASELINE STEGANOGRAPHY MODEL
