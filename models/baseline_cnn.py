@@ -214,7 +214,6 @@ class Decoder(nn.Module):
 
         return secret_feature
 # ============================================================
-# MESSAGE DECODER
 # ============================================================
 # ============================================================
 # MESSAGE DECODER
@@ -222,43 +221,33 @@ class Decoder(nn.Module):
 # ============================================================
 
 class MessageDecoder(nn.Module):
-    """
-    Converts the decoded spatial feature representation
-    into the original 256-bit message.
-
-    Uses global spatial average pooling, inspired by HiDDeN.
-    """
-
     def __init__(self, message_bits=256):
         super().__init__()
 
-        # Global spatial average pooling
-        self.pool = nn.AdaptiveAvgPool2d((1, 1))
+        # Keep more spatial information
+        self.pool = nn.AdaptiveAvgPool2d((8, 8))
 
-        # 32 spatial feature channels -> 256 message bits
-        self.fc = nn.Linear(
-            32,
-            message_bits
+        # 32 channels × 8 × 8 = 2048 features
+        self.fc = nn.Sequential(
+            nn.Linear(32 * 8 * 8, 512),
+            nn.ReLU(inplace=True),
+
+            nn.Linear(512, message_bits),
+            nn.Sigmoid()
         )
-
-        self.sigmoid = nn.Sigmoid()
 
     def forward(self, secret_feature):
 
         # [B, 32, 256, 256]
         x = self.pool(secret_feature)
 
-        # [B, 32, 1, 1]
-        x = x.view(
-            x.size(0),
-            -1
-        )
+        # [B, 32, 8, 8]
+        x = x.view(x.size(0), -1)
 
-        # [B, 32] -> [B, 256]
+        # [B, 2048]
         message = self.fc(x)
 
-        message = self.sigmoid(message)
-
+        # [B, 256]
         return message
 # ============================================================
 # COMPLETE BASELINE STEGANOGRAPHY MODEL
