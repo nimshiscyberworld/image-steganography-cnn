@@ -75,7 +75,7 @@ class ConvBlock(nn.Module):
 # ENCODER
 # ============================================================
 
-# class ResidualBlock(nn.Module):
+ class ResidualBlock(nn.Module):
     def __init__(self, channels):
         super().__init__()
 
