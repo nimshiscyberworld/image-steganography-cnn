@@ -108,30 +108,21 @@ class Encoder(nn.Module):
 
         self.sigmoid = nn.Sigmoid()
 
-    def forward(self, cover, secret_feature):
+   def forward(self, cover, message_feature):
 
-        # Combine cover image and message feature
+    x = torch.cat(
+        [cover, message_feature],
+        dim=1
+    )
 
-        x = torch.cat(
-            [cover, secret_feature],
-            dim=1
-        )
+    x = self.conv1(x)
+    x = self.conv2(x)
+    x = self.conv3(x)
+    x = self.conv4(x)
 
-        x = self.conv1(x)
+    stego = self.output(x)
 
-        x = self.conv2(x)
-
-        x = self.conv3(x)
-
-        x = self.conv4(x)
-
-        # Generate stego image
-
-        stego = self.output(x)
-
-        stego = self.sigmoid(stego)
-
-        return stego
+    return stego
 
 # ============================================================
 # DECODER
