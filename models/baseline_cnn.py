@@ -75,35 +75,87 @@ class ConvBlock(nn.Module):
 # ENCODER
 # ============================================================
 
-# ============================================================
-# ENCODER
-# ============================================================
+# class ResidualBlock(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+
+        self.block = nn.Sequential(
+            nn.Conv2d(
+                channels,
+                channels,
+                kernel_size=3,
+                padding=1
+            ),
+            nn.BatchNorm2d(channels),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(
+                channels,
+                channels,
+                kernel_size=3,
+                padding=1
+            ),
+            nn.BatchNorm2d(channels)
+        )
+
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        residual = x
+
+        x = self.block(x)
+
+        x = x + residual
+
+        x = self.relu(x)
+
+        return x
+
 
 class Encoder(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.conv1 = ConvBlock(65, 32)
-        self.conv2 = ConvBlock(32, 64)
-        self.conv3 = ConvBlock(64, 64)
-        self.conv4 = ConvBlock(64, 32)
+        # Cover: 1 channel
+        # Message feature: 64 channels
+        # Total input: 65 channels
+        self.input_conv = nn.Sequential(
+            nn.Conv2d(
+                65,
+                64,
+                kernel_size=3,
+                padding=1
+            ),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True)
+        )
 
-        self.output = nn.Conv2d(
-            32,
+        self.res_block1 = ResidualBlock(64)
+        self.res_block2 = ResidualBlock(64)
+        self.res_block3 = ResidualBlock(64)
+
+        self.output_conv = nn.Conv2d(
+            64,
             1,
             kernel_size=3,
             padding=1
         )
 
     def forward(self, cover, message_feature):
-        x = torch.cat([cover, message_feature], dim=1)
 
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.conv3(x)
-        x = self.conv4(x)
+        # Combine cover and message features
+        x = torch.cat(
+            [cover, message_feature],
+            dim=1
+        )
 
-        stego = self.output(x)
+        x = self.input_conv(x)
+
+        x = self.res_block1(x)
+        x = self.res_block2(x)
+        x = self.res_block3(x)
+
+        stego = self.output_conv(x)
 
         return stego
 # ============================================================
