@@ -75,18 +75,26 @@ class ConvBlock(nn.Module):
 # ENCODER
 # ============================================================
 
- class ResidualBlock(nn.Module):
+ # ============================================================
+# RESIDUAL BLOCK
+# ============================================================
+
+class ResidualBlock(nn.Module):
+
     def __init__(self, channels):
         super().__init__()
 
         self.block = nn.Sequential(
+
             nn.Conv2d(
                 channels,
                 channels,
                 kernel_size=3,
                 padding=1
             ),
+
             nn.BatchNorm2d(channels),
+
             nn.ReLU(inplace=True),
 
             nn.Conv2d(
@@ -95,12 +103,14 @@ class ConvBlock(nn.Module):
                 kernel_size=3,
                 padding=1
             ),
+
             nn.BatchNorm2d(channels)
         )
 
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
+
         residual = x
 
         x = self.block(x)
@@ -112,26 +122,38 @@ class ConvBlock(nn.Module):
         return x
 
 
+# ============================================================
+# ENCODER / HIDING NETWORK
+# ============================================================
+
 class Encoder(nn.Module):
+
     def __init__(self):
+
         super().__init__()
 
-        # Cover: 1 channel
-        # Message feature: 64 channels
-        # Total input: 65 channels
+        # Cover = 1 channel
+        # Message feature = 64 channels
+        # Total = 65 channels
+
         self.input_conv = nn.Sequential(
+
             nn.Conv2d(
                 65,
                 64,
                 kernel_size=3,
                 padding=1
             ),
+
             nn.BatchNorm2d(64),
+
             nn.ReLU(inplace=True)
         )
 
         self.res_block1 = ResidualBlock(64)
+
         self.res_block2 = ResidualBlock(64)
+
         self.res_block3 = ResidualBlock(64)
 
         self.output_conv = nn.Conv2d(
@@ -152,7 +174,9 @@ class Encoder(nn.Module):
         x = self.input_conv(x)
 
         x = self.res_block1(x)
+
         x = self.res_block2(x)
+
         x = self.res_block3(x)
 
         stego = self.output_conv(x)
