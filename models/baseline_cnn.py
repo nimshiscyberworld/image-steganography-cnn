@@ -88,8 +88,7 @@ class Encoder(nn.Module):
         # Cover = 1 channel
         # Secret feature = 32 channels
         # Combined = 33 channels
-
-       self.conv1 = ConvBlock(65, 32)
+ self.conv1 = ConvBlock(65, 32)
 
 self.conv2 = ConvBlock(32, 64)
 
