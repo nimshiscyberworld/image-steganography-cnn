@@ -11,61 +11,31 @@ import torch.nn as nn
 # ============================================================
 
 class MessageEmbedder(nn.Module):
-    """
-    Converts a 256-bit message into a spatially replicated
-    multi-channel representation.
-
-    HiDDeN-inspired approach:
-    The message information is distributed spatially across
-    the image instead of being generated as a 16x16 feature map.
-    """
-
-    def __init__(self, message_bits=256, feature_channels=32):
+    def __init__(self, message_bits=256, feature_channels=64):
         super().__init__()
 
         self.feature_channels = feature_channels
 
-        # Project 256 message bits into 32 feature values
         self.fc = nn.Sequential(
-            nn.Linear(
-                message_bits,
-                feature_channels
-            ),
+            nn.Linear(message_bits, 256),
+            nn.ReLU(inplace=True),
+
+            nn.Linear(256, feature_channels),
             nn.ReLU(inplace=True)
         )
 
     def forward(self, message):
 
-        # ----------------------------------------------------
-        # message
-        # [B, 256]
-        # ----------------------------------------------------
-
+        # [B, 256] -> [B, 64]
         x = self.fc(message)
 
-        # ----------------------------------------------------
-        # [B, 32]
-        # → [B, 32, 1, 1]
-        # ----------------------------------------------------
-
+        # [B, 64, 1, 1]
         x = x.unsqueeze(-1).unsqueeze(-1)
 
-        # ----------------------------------------------------
-        # Spatially replicate message features
-        # [B, 32, 1, 1]
-        # →
-        # [B, 32, 256, 256]
-        # ----------------------------------------------------
-
-        x = x.expand(
-            -1,
-            -1,
-            256,
-            256
-        )
+        # [B, 64, 256, 256]
+        x = x.expand(-1, -1, 256, 256)
 
         return x
-
 # ============================================================
 # CNN BLOCK
 # ============================================================
