@@ -95,24 +95,17 @@ class Encoder(nn.Module):
             padding=1
         )
 
-        self.sigmoid = nn.Sigmoid()
+    def forward(self, cover, message_feature):
+        x = torch.cat([cover, message_feature], dim=1)
 
-   def forward(self, cover, message_feature):
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.conv3(x)
+        x = self.conv4(x)
 
-    x = torch.cat(
-        [cover, message_feature],
-        dim=1
-    )
+        stego = self.output(x)
 
-    x = self.conv1(x)
-    x = self.conv2(x)
-    x = self.conv3(x)
-    x = self.conv4(x)
-
-    stego = self.output(x)
-
-    return stego
-
+        return stego
 # ============================================================
 # DECODER
 # ============================================================
