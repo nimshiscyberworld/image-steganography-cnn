@@ -89,14 +89,13 @@ class Encoder(nn.Module):
         # Secret feature = 32 channels
         # Combined = 33 channels
 
-        self.conv1 = ConvBlock(33, 32)
+       self.conv1 = ConvBlock(65, 32)
 
-        self.conv2 = ConvBlock(32, 64)
+self.conv2 = ConvBlock(32, 64)
 
-        self.conv3 = ConvBlock(64, 64)
+self.conv3 = ConvBlock(64, 64)
 
-        self.conv4 = ConvBlock(64, 32)
-
+self.conv4 = ConvBlock(64, 32)
         # Stego image must be 1 channel
 
         self.output = nn.Conv2d(
