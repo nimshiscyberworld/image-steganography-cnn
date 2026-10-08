@@ -1,362 +1,319 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 # ============================================================
-# MESSAGE EMBEDDER
-# ============================================================
-# ============================================================
-# MESSAGE EMBEDDER
-# HiDDeN-inspired spatial message representation
+# 1. MESSAGE PREPARATION NETWORK
 # ============================================================
 
 class MessageEmbedder(nn.Module):
-    def __init__(self, message_bits=256, feature_channels=64):
+    """
+    Converts a 256-bit message into a spatial feature map.
+
+    Input:
+        [B, 256]
+
+    Output:
+        [B, 32, 256, 256]
+    """
+
+    def __init__(self, message_bits=256, feature_channels=32):
         super().__init__()
 
-        self.feature_channels = feature_channels
+        self.message_bits = message_bits
 
-        self.fc = nn.Sequential(
-            nn.Linear(message_bits, 256),
-            nn.ReLU(inplace=True),
+        # 256 bits -> 16 x 16 spatial representation
+        self.fc = nn.Linear(
+            message_bits,
+            16 * 16
+        )
 
-            nn.Linear(256, feature_channels),
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(1, feature_channels, 3, padding=1),
+            nn.BatchNorm2d(feature_channels),
+            nn.ReLU(inplace=True)
+        )
+
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(feature_channels, feature_channels, 3, padding=1),
+            nn.BatchNorm2d(feature_channels),
+            nn.ReLU(inplace=True)
+        )
+
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(feature_channels, feature_channels, 3, padding=1),
+            nn.BatchNorm2d(feature_channels),
+            nn.ReLU(inplace=True)
+        )
+
+        self.conv4 = nn.Sequential(
+            nn.Conv2d(feature_channels, feature_channels, 3, padding=1),
+            nn.BatchNorm2d(feature_channels),
             nn.ReLU(inplace=True)
         )
 
     def forward(self, message):
 
-        # [B, 256] -> [B, 64]
+        # [B, 256] -> [B, 256]
         x = self.fc(message)
 
-        # [B, 64, 1, 1]
-        x = x.unsqueeze(-1).unsqueeze(-1)
-
-        # [B, 64, 256, 256]
-        x = x.expand(-1, -1, 256, 256)
-
-        return x
-# ============================================================
-# CNN BLOCK
-# ============================================================
-
-class ConvBlock(nn.Module):
-
-    def __init__(self, in_channels, out_channels):
-        super().__init__()
-
-        self.block = nn.Sequential(
-
-            nn.Conv2d(
-                in_channels,
-                out_channels,
-                kernel_size=3,
-                padding=1
-            ),
-
-            nn.ReLU(inplace=True),
-
-            nn.Conv2d(
-                out_channels,
-                out_channels,
-                kernel_size=3,
-                padding=1
-            ),
-
-            nn.ReLU(inplace=True)
+        # [B, 256] -> [B, 1, 16, 16]
+        x = x.view(
+            x.size(0),
+            1,
+            16,
+            16
         )
 
-    def forward(self, x):
-
-        return self.block(x)
-
-
-# ============================================================
-# ENCODER
-# ============================================================
-
- # ============================================================
-# RESIDUAL BLOCK
-# ============================================================
-
-class ResidualBlock(nn.Module):
-
-    def __init__(self, channels):
-        super().__init__()
-
-        self.block = nn.Sequential(
-
-            nn.Conv2d(
-                channels,
-                channels,
-                kernel_size=3,
-                padding=1
-            ),
-
-            nn.BatchNorm2d(channels),
-
-            nn.ReLU(inplace=True),
-
-            nn.Conv2d(
-                channels,
-                channels,
-                kernel_size=3,
-                padding=1
-            ),
-
-            nn.BatchNorm2d(channels)
+        # 16 -> 32
+        x = F.interpolate(
+            x,
+            scale_factor=2,
+            mode="bilinear",
+            align_corners=False
         )
 
-        self.relu = nn.ReLU(inplace=True)
+        x = self.conv1(x)
 
-    def forward(self, x):
+        # 32 -> 64
+        x = F.interpolate(
+            x,
+            scale_factor=2,
+            mode="bilinear",
+            align_corners=False
+        )
 
-        residual = x
+        x = self.conv2(x)
 
-        x = self.block(x)
+        # 64 -> 128
+        x = F.interpolate(
+            x,
+            scale_factor=2,
+            mode="bilinear",
+            align_corners=False
+        )
 
-        x = x + residual
+        x = self.conv3(x)
 
-        x = self.relu(x)
+        # 128 -> 256
+        x = F.interpolate(
+            x,
+            scale_factor=2,
+            mode="bilinear",
+            align_corners=False
+        )
+
+        x = self.conv4(x)
 
         return x
 
 
 # ============================================================
-# ENCODER / HIDING NETWORK
+# 2. HIDING NETWORK / ENCODER
 # ============================================================
 
 class Encoder(nn.Module):
 
     def __init__(self):
-
         super().__init__()
 
         # Cover = 1 channel
-        # Message feature = 64 channels
-        # Total = 65 channels
+        # Message features = 32 channels
+        # Total = 33 channels
 
-        self.input_conv = nn.Sequential(
-
-            nn.Conv2d(
-                65,
-                64,
-                kernel_size=3,
-                padding=1
-            ),
-
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(33, 64, 3, padding=1),
             nn.BatchNorm2d(64),
-
             nn.ReLU(inplace=True)
         )
 
-        self.res_block1 = ResidualBlock(64)
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(64, 64, 3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True)
+        )
 
-        self.res_block2 = ResidualBlock(64)
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(64, 64, 3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True)
+        )
 
-        self.res_block3 = ResidualBlock(64)
+        self.conv4 = nn.Sequential(
+            nn.Conv2d(64, 32, 3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True)
+        )
 
-        self.output_conv = nn.Conv2d(
-            64,
+        # Produces the stego image
+        self.output = nn.Conv2d(
+            32,
             1,
-            kernel_size=3,
+            3,
             padding=1
         )
 
     def forward(self, cover, message_feature):
 
-        # Combine cover and message features
+        # [B,1,256,256] + [B,32,256,256]
+        # -> [B,33,256,256]
+
         x = torch.cat(
             [cover, message_feature],
             dim=1
         )
 
-        x = self.input_conv(x)
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.conv3(x)
+        x = self.conv4(x)
 
-        x = self.res_block1(x)
+        # Predict hidden residual
+        residual = self.output(x)
 
-        x = self.res_block2(x)
+        # Keep modification bounded
+        residual = 0.05 * torch.tanh(residual)
 
-        x = self.res_block3(x)
+        # Add small message-dependent residual to cover
+        stego = cover + residual
 
-        stego = self.output_conv(x)
+        # Keep image in valid [0,1] range
+        stego = torch.clamp(
+            stego,
+            0.0,
+            1.0
+        )
 
         return stego
-# ============================================================
-# DECODER
-# ============================================================
+
 
 # ============================================================
-# DECODER
+# 3. REVEAL / DECODER NETWORK
 # ============================================================
 
 class Decoder(nn.Module):
 
     def __init__(self):
-
         super().__init__()
 
-        self.conv1 = ConvBlock(1, 32)
-
-        self.conv2 = ConvBlock(32, 64)
-
-        self.conv3 = ConvBlock(64, 64)
-
-        self.conv4 = ConvBlock(64, 32)
-
-        # Output 32-channel recovered feature
-
-        self.output = nn.Conv2d(
-            32,
-            32,
-            kernel_size=3,
-            padding=1
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(1, 32, 3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True)
         )
 
-        self.sigmoid = nn.Sigmoid()
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(32, 64, 3, stride=2, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True)
+        )
+
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(64, 128, 3, stride=2, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True)
+        )
+
+        self.conv4 = nn.Sequential(
+            nn.Conv2d(128, 128, 3, stride=2, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True)
+        )
+
+        self.conv5 = nn.Sequential(
+            nn.Conv2d(128, 128, 3, stride=2, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True)
+        )
 
     def forward(self, stego):
 
         x = self.conv1(stego)
-
         x = self.conv2(x)
-
         x = self.conv3(x)
-
         x = self.conv4(x)
+        x = self.conv5(x)
 
-        secret_feature = self.output(x)
+        return x
 
-        secret_feature = self.sigmoid(
-            secret_feature
-        )
 
-        return secret_feature
 # ============================================================
-# ============================================================
-# ============================================================
-# MESSAGE DECODER
-# HiDDeN-inspired message recovery
+# 4. MESSAGE DECODER
 # ============================================================
 
 class MessageDecoder(nn.Module):
-    """
-    Converts the decoded spatial feature representation
-    into the original 256-bit message.
-
-    Keeps more spatial information before message reconstruction.
-    """
 
     def __init__(self, message_bits=256):
+
         super().__init__()
 
-        # Reduce 256x256 feature map to 8x8
-        self.pool = nn.AdaptiveAvgPool2d((8, 8))
+        # Decoder output:
+        # [B,128,16,16]
+        #
+        # Flatten:
+        # 128 * 16 * 16 = 32768
 
-        # 32 channels x 8 x 8 = 2048 features
         self.fc = nn.Sequential(
-            nn.Linear(32 * 8 * 8, 512),
+
+            nn.Linear(
+                128 * 16 * 16,
+                1024
+            ),
+
             nn.ReLU(inplace=True),
 
-            nn.Linear(512, message_bits),
-            nn.Sigmoid()
+            nn.Linear(
+                1024,
+                message_bits
+            )
+
+            # IMPORTANT:
+            # No Sigmoid here.
+            #
+            # We will use:
+            # BCEWithLogitsLoss()
         )
 
-    def forward(self, secret_feature):
+    def forward(self, x):
 
-        # Input: [B, 32, 256, 256]
-        x = self.pool(secret_feature)
-
-        # [B, 32, 8, 8] -> [B, 2048]
-        x = x.view(x.size(0), -1)
-
-        # [B, 256]
-        message = self.fc(x)
-
-        return message
-# ============================================================
-# COMPLETE BASELINE STEGANOGRAPHY MODEL
-# ============================================================
-
-class BaselineSteganography(nn.Module):
-
-    def __init__(self, message_bits=256):
-
-        super().__init__()
-
-        self.message_embedder = MessageEmbedder(
-            message_bits
+        x = x.view(
+            x.size(0),
+            -1
         )
 
-        self.encoder = Encoder()
+        logits = self.fc(x)
 
-        self.decoder = Decoder()
-
-        self.message_decoder = MessageDecoder(
-            message_bits
-        )
-
-    def forward(self, cover, message):
-
-        # ----------------------------------------------------
-        # 1. Convert message bits → spatial representation
-        # ----------------------------------------------------
-
-        secret_feature = self.message_embedder(
-            message
-        )
-
-        # ----------------------------------------------------
-        # 2. Create stego image
-        # ----------------------------------------------------
-
-        stego = self.encoder(
-            cover,
-            secret_feature
-        )
-
-        # ----------------------------------------------------
-        # 3. Recover secret representation
-        # ----------------------------------------------------
-
-        recovered_feature = self.decoder(
-            stego
-        )
-
-        # ----------------------------------------------------
-        # 4. Recover original message bits
-        # ----------------------------------------------------
-
-        recovered_message = self.message_decoder(
-            recovered_feature
-        )
-
-        return (
-            stego,
-            recovered_message
-        )
+        return logits
 
 
 # ============================================================
-# MODEL TEST
+# 5. COMPLETE MODEL TEST
 # ============================================================
 
 if __name__ == "__main__":
 
-    print("=" * 60)
-    print("BASELINE STEGANOGRAPHY MODEL TEST")
-    print("=" * 60)
+    print("=" * 70)
+    print("CNN IMAGE STEGANOGRAPHY - NEW ARCHITECTURE TEST")
+    print("=" * 70)
 
-    # --------------------------------------------------------
-    # Create model
-    # --------------------------------------------------------
-
-    model = BaselineSteganography(
-        message_bits=256
+    device = torch.device(
+        "cuda" if torch.cuda.is_available() else "cpu"
     )
 
+    print("\nDevice:", device)
+
     # --------------------------------------------------------
-    # Dummy data
+    # Create models
+    # --------------------------------------------------------
+
+    embedder = MessageEmbedder().to(device)
+    encoder = Encoder().to(device)
+    decoder = Decoder().to(device)
+    message_decoder = MessageDecoder().to(device)
+
+    # --------------------------------------------------------
+    # Dummy input
     # --------------------------------------------------------
 
     batch_size = 2
@@ -365,54 +322,120 @@ if __name__ == "__main__":
         batch_size,
         1,
         256,
-        256
+        256,
+        device=device
     )
 
     message = torch.randint(
         0,
         2,
-        (
-            batch_size,
-            256
-        )
+        (batch_size, 256),
+        device=device
     ).float()
 
     # --------------------------------------------------------
     # Forward pass
     # --------------------------------------------------------
 
-    stego, recovered_message = model(
+    message_feature = embedder(message)
+
+    stego = encoder(
         cover,
-        message
+        message_feature
+    )
+
+    decoder_feature = decoder(
+        stego
+    )
+
+    recovered_logits = message_decoder(
+        decoder_feature
     )
 
     # --------------------------------------------------------
-    # Results
+    # Print shapes
     # --------------------------------------------------------
 
-    print("\nInput:")
-    print("Cover shape       :", cover.shape)
-    print("Message shape     :", message.shape)
+    print("\nShapes:")
+    print("----------------------------------------")
 
-    print("\nOutput:")
-    print("Stego shape       :", stego.shape)
     print(
-        "Recovered message :",
-        recovered_message.shape
+        "Cover:",
+        cover.shape
+    )
+
+    print(
+        "Message:",
+        message.shape
+    )
+
+    print(
+        "Message feature:",
+        message_feature.shape
+    )
+
+    print(
+        "Stego:",
+        stego.shape
+    )
+
+    print(
+        "Decoder feature:",
+        decoder_feature.shape
+    )
+
+    print(
+        "Recovered logits:",
+        recovered_logits.shape
+    )
+
+    # --------------------------------------------------------
+    # Convert logits to probabilities
+    # --------------------------------------------------------
+
+    recovered_probability = torch.sigmoid(
+        recovered_logits
+    )
+
+    print(
+        "Recovered probability:",
+        recovered_probability.shape
+    )
+
+    # --------------------------------------------------------
+    # Test BCEWithLogitsLoss
+    # --------------------------------------------------------
+
+    loss = nn.BCEWithLogitsLoss()(
+        recovered_logits,
+        message
+    )
+
+    print(
+        "\nInitial BCEWithLogitsLoss:",
+        loss.item()
     )
 
     # --------------------------------------------------------
     # Parameter count
     # --------------------------------------------------------
 
-    total_params = sum(
+    total_parameters = sum(
         p.numel()
+        for model in [
+            embedder,
+            encoder,
+            decoder,
+            message_decoder
+        ]
         for p in model.parameters()
     )
 
-    print("\nTotal parameters:")
-    print(total_params)
+    print(
+        "\nTotal parameters:",
+        f"{total_parameters:,}"
+    )
 
-    print("\nModel test successful!")
-
-    print("=" * 60)
+    print("\n" + "=" * 70)
+    print("MODEL TEST SUCCESSFUL")
+    print("=" * 70)
