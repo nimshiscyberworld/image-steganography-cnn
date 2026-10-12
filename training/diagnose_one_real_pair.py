@@ -1,11 +1,17 @@
 
+
 import os
+import sys
+from pathlib import Path
+# Add the project root to Python's import path
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
 import random
 import numpy as np
 import torch
 import torch.nn as nn
 from PIL import Image
-from pathlib import Path
 
 from models.baseline_cnn import (
     MessageEmbedder, Encoder, Decoder, MessageDecoder
