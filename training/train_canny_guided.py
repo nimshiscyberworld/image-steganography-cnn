@@ -1,5 +1,5 @@
 
-%%writefile /kaggle/working/image-steganography-cnn/training/train_canny_guided.py
+
 import os
 import sys
 import csv
